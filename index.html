@@ -517,34 +517,23 @@
 
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
-import { getDatabase, ref, set } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js';
+    import { getDatabase, ref, set } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCzmiqY0gRlwxIWmNQZobyjR-EsvmIJYXY",
-  authDomain: "padelturnier.firebaseapp.com",
-  databaseURL: "https://padelturnier-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "padelturnier",
-  storageBucket: "padelturnier.firebasestorage.app",
-  messagingSenderId: "320980269605",
-  appId: "1:320980269605:web:731a92286e0b6a3b119dcc"
-};
+    const firebaseConfig = {
+      apiKey: "AIzaSyCzmiqY0gRlwxIWmNQZobyjR-EsvmIJYXY",
+      authDomain: "padelturnier.firebaseapp.com",
+      databaseURL: "https://padelturnier-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "padelturnier",
+      storageBucket: "padelturnier.firebasestorage.app",
+      messagingSenderId: "320980269605",
+      appId: "1:320980269605:web:731a92286e0b6a3b119dcc"
+    };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const tournamentRef = ref(db, 'tournament/current');
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const tournamentRef = ref(db, 'tournament/current');
 
-function pushLiveState() {
-  set(tournamentRef, {
-    round,
-    teams,
-    matches,
-    resting,
-    finalShown
-  }).catch(error => {
-    console.error('Fehler beim Live-Schreiben:', error);
-  });
-}
-    const STORAGE_KEY = 'padel-turnier-manager-state-v3';
+    const STORAGE_KEY = 'padel-turnier-manager-state-v4';
     const MAX_GAMES_PER_TEAM = 5;
     const ROUND_TIMES = [
       '14:00 - 14:18',
@@ -557,41 +546,31 @@ function pushLiveState() {
       '16:20 - 16:38',
     ];
 
-    let teams = Array.from({ length: 12 }, (_, i) => ({
-      id: `T${i + 1}`,
-      name: `Team ${i + 1}`,
-      playedOpponents: [],
-      points: 0,
-      gamesFor: 0,
-      gamesAgainst: 0,
-      played: 0,
-      byes: 0,
-    }));
-
+    let teams = [];
     let round = 1;
-    let matches = [
-      { court: 1, teamA: 'T1', teamB: 'T2', scoreA: '', scoreB: '' },
-      { court: 2, teamA: 'T3', teamB: 'T4', scoreA: '', scoreB: '' },
-      { court: 3, teamA: 'T5', teamB: 'T6', scoreA: '', scoreB: '' },
-      { court: 4, teamA: 'T7', teamB: 'T8', scoreA: '', scoreB: '' },
-    ];
-    let resting = ['T9', 'T10', 'T11', 'T12'];
+    let matches = [];
+    let resting = [];
     let finalShown = false;
     let previousState = null;
-    let lastResting = ['T9', 'T10', 'T11', 'T12'];
+
+    function createDefaultTeams() {
+      return Array.from({ length: 12 }, (_, i) => ({
+        id: `T${i + 1}`,
+        name: `Team ${i + 1}`,
+        playedOpponents: [],
+        points: 0,
+        gamesFor: 0,
+        gamesAgainst: 0,
+        played: 0,
+        byes: 0,
+        gameStreak: 0,
+        restStreak: 0,
+      }));
+    }
 
     function defaultState() {
       return {
-        teams: Array.from({ length: 12 }, (_, i) => ({
-          id: `T${i + 1}`,
-          name: `Team ${i + 1}`,
-          playedOpponents: [],
-          points: 0,
-          gamesFor: 0,
-          gamesAgainst: 0,
-          played: 0,
-          byes: 0,
-        })),
+        teams: createDefaultTeams(),
         round: 1,
         matches: [
           { court: 1, teamA: 'T1', teamB: 'T2', scoreA: '', scoreB: '' },
@@ -600,30 +579,63 @@ function pushLiveState() {
           { court: 4, teamA: 'T7', teamB: 'T8', scoreA: '', scoreB: '' },
         ],
         resting: ['T9', 'T10', 'T11', 'T12'],
-        lastResting: ['T9', 'T10', 'T11', 'T12'],
         finalShown: false,
+        previousState: null
       };
     }
 
     function saveState() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ teams, round, matches, resting, lastResting, finalShown, previousState }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        teams,
+        round,
+        matches,
+        resting,
+        finalShown,
+        previousState
+      }));
     }
 
     function loadState() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        if (parsed?.teams && parsed?.matches && parsed?.resting) {
-          teams = parsed.teams;
-          round = parsed.round || 1;
-          matches = parsed.matches;
-          resting = parsed.resting;
-          lastResting = parsed.lastResting || parsed.resting || [];
-          finalShown = !!parsed.finalShown;
-          previousState = parsed.previousState || null;
+        if (!raw) {
+          const state = defaultState();
+          teams = state.teams;
+          round = state.round;
+          matches = state.matches;
+          resting = state.resting;
+          finalShown = state.finalShown;
+          previousState = state.previousState;
+          return;
         }
-      } catch (e) {}
+        const parsed = JSON.parse(raw);
+        teams = parsed.teams || createDefaultTeams();
+        round = parsed.round || 1;
+        matches = parsed.matches || [];
+        resting = parsed.resting || [];
+        finalShown = !!parsed.finalShown;
+        previousState = parsed.previousState || null;
+      } catch (e) {
+        const state = defaultState();
+        teams = state.teams;
+        round = state.round;
+        matches = state.matches;
+        resting = state.resting;
+        finalShown = state.finalShown;
+        previousState = state.previousState;
+      }
+    }
+
+    function pushLiveState() {
+      set(tournamentRef, {
+        round,
+        teams,
+        matches,
+        resting,
+        finalShown
+      }).catch(error => {
+        console.error('Fehler beim Live-Schreiben:', error);
+      });
     }
 
     function sortTeams(arr) {
@@ -652,12 +664,12 @@ function pushLiveState() {
 
     function allScoresFilled() {
       const active = activeMatches();
-      return active.length > 0 && active.every(m => String(m.scoreA) !== '' && String(m.scoreB) !== '');
+      return active.length > 0 && active.every(m => `${m.scoreA}` !== '' && `${m.scoreB}` !== '');
     }
 
     function scoreClass(match, side) {
-      const a = String(match.scoreA);
-      const b = String(match.scoreB);
+      const a = `${match.scoreA}`;
+      const b = `${match.scoreB}`;
       if (a === '' || b === '') return '';
       const scoreA = Number(a);
       const scoreB = Number(b);
@@ -666,12 +678,11 @@ function pushLiveState() {
       return scoreB > scoreA ? 'winner-box' : 'loser-box';
     }
 
-    function printView() {
-      window.print();
-    }
-
-    function isTournamentFinished() {
-      return teams.length > 0 && teams.every(team => team.played >= MAX_GAMES_PER_TEAM);
+    function updateStats() {
+      document.getElementById('roundValue').textContent = round;
+      document.getElementById('roundTime').textContent = ROUND_TIMES[round - 1] || '-';
+      const teamCountEl = document.getElementById('teamCount');
+      if (teamCountEl) teamCountEl.textContent = teams.length;
     }
 
     function renderMatches() {
@@ -703,28 +714,32 @@ function pushLiveState() {
           const court = Number(e.target.dataset.court);
           const field = e.target.dataset.field;
           const value = e.target.value.replace(/[^0-9]/g, '');
-          const selectionStart = value.length;
-          matches = matches.map(m => m.court === court ? { ...m, [field]: value } : m);
           e.target.value = value;
+
+          matches = matches.map(m => m.court === court ? { ...m, [field]: value } : m);
+
           const card = e.target.closest('.match');
-          const teamABox = card?.querySelector('.team-box:nth-of-type(1)');
-          const teamBBox = card?.querySelector('.team-box:nth-of-type(2)');
+          const boxes = card?.querySelectorAll('.team-box');
           const match = matches.find(m => m.court === court);
-          if (teamABox && teamBBox && match) {
-            teamABox.className = `team-box ${scoreClass(match, 'A')}`.trim();
-            teamBBox.className = `team-box ${scoreClass(match, 'B')}`.trim();
+
+          if (boxes && boxes.length === 2 && match) {
+            boxes[0].className = `team-box ${scoreClass(match, 'A')}`.trim();
+            boxes[1].className = `team-box ${scoreClass(match, 'B')}`.trim();
           }
+
           updateButton();
-          e.target.focus();
-          e.target.setSelectionRange(selectionStart, selectionStart);
           saveState();
+          pushLiveState();
         });
       });
     }
 
     function renderRanking() {
       const sorted = sortTeams(teams);
-      document.getElementById('rankingBody').innerHTML = sorted.map((t, idx) => `
+      const rankingBody = document.getElementById('rankingBody');
+      const top3 = document.getElementById('top3');
+
+      rankingBody.innerHTML = sorted.map((t, idx) => `
         <tr class="${idx < 3 ? 'top' : ''}">
           <td>${idx + 1}</td>
           <td>${t.name}</td>
@@ -736,8 +751,7 @@ function pushLiveState() {
         </tr>
       `).join('');
 
-      const topThree = sorted.slice(0, 3);
-      document.getElementById('top3').innerHTML = topThree.map((team, idx) => `
+      top3.innerHTML = sorted.slice(0, 3).map((team, idx) => `
         <div class="podium">
           <small>Platz ${idx + 1}</small>
           <div class="name">${team.name}</div>
@@ -750,12 +764,11 @@ function pushLiveState() {
     }
 
     function renderPause() {
-      document.getElementById('pauseList').innerHTML = resting.map(id => {
+      const pauseList = document.getElementById('pauseList');
+      pauseList.innerHTML = resting.map(id => {
         const team = getTeam(id);
         const finished = team && team.played >= MAX_GAMES_PER_TEAM;
-        return `
-          <div class="pause-item">${getName(id)}${finished ? ' , fertig' : ''}</div>
-        `;
+        return `<div class="pause-item">${getName(id)}${finished ? ' , fertig' : ''}</div>`;
       }).join('');
     }
 
@@ -771,20 +784,26 @@ function pushLiveState() {
       container.querySelectorAll('.name-input').forEach(input => {
         input.addEventListener('input', e => {
           const id = e.target.dataset.team;
+          const cursorPos = e.target.selectionStart;
+
           teams = teams.map(t => t.id === id ? { ...t, name: e.target.value } : t);
           renderAll();
+
           const active = document.querySelector(`.name-input[data-team="${id}"]`);
           if (active) {
             active.focus();
-            active.setSelectionRange(e.target.value.length, e.target.value.length);
+            active.setSelectionRange(cursorPos, cursorPos);
           }
         });
       });
     }
 
     function renderSearch() {
-      const search = document.getElementById('searchInput').value.toLowerCase().trim();
+      const input = document.getElementById('searchInput');
       const result = document.getElementById('searchResult');
+      if (!input || !result) return;
+
+      const search = input.value.toLowerCase().trim();
 
       if (!search) {
         result.innerHTML = '<div style="color:#94a3b8">Gib einen Teamnamen ein, um Platz, Zeit und Gegner zu sehen.</div>';
@@ -798,6 +817,7 @@ function pushLiveState() {
       }
 
       const nextMatch = matches.find(m => m.teamA === filteredTeam.id || m.teamB === filteredTeam.id);
+
       if (nextMatch) {
         const opponent = getName(nextMatch.teamA === filteredTeam.id ? nextMatch.teamB : nextMatch.teamA);
         result.innerHTML = `
@@ -814,20 +834,26 @@ function pushLiveState() {
       }
     }
 
-    function updateStats() {
-      document.getElementById('roundValue').textContent = round;
-      document.getElementById('roundTime').textContent = ROUND_TIMES[round - 1] || '-';
-      document.getElementById('teamCount').textContent = teams.length;
-    }
-
     function updateButton() {
       document.getElementById('nextRoundBtn').disabled = !allScoresFilled() || isTournamentFinished();
     }
 
+    function updateEditLastRoundButton() {
+      const btn = document.getElementById('editLastRoundBtn');
+      if (btn) btn.disabled = !previousState;
+    }
+
+    function printView() {
+      window.print();
+    }
+
+    function isTournamentFinished() {
+      return teams.length > 0 && teams.every(team => team.played >= MAX_GAMES_PER_TEAM);
+    }
+
     function renderFinalRanking() {
       const sorted = sortTeams(teams);
-      const podium = sorted.slice(0, 3);
-      document.getElementById('finalPodium').innerHTML = podium.map((team, idx) => `
+      document.getElementById('finalPodium').innerHTML = sorted.slice(0, 3).map((team, idx) => `
         <div class="final-podium-card">
           <small>Platz ${idx + 1}</small>
           <div class="big">${team.name}</div>
@@ -854,6 +880,7 @@ function pushLiveState() {
       document.body.style.overflow = 'hidden';
       finalShown = true;
       saveState();
+      pushLiveState();
     }
 
     function hideFinalRanking() {
@@ -869,17 +896,17 @@ function pushLiveState() {
 
     function buildFairPairings(candidates) {
       const pool = [...candidates].sort((a, b) => {
-        const aWasResting = lastResting.includes(a.id) ? 1 : 0;
-        const bWasResting = lastResting.includes(b.id) ? 1 : 0;
-        if (aWasResting !== bWasResting) return aWasResting - bWasResting;
+        if ((b.restStreak || 0) !== (a.restStreak || 0)) return (b.restStreak || 0) - (a.restStreak || 0);
         if (a.played !== b.played) return a.played - b.played;
         if (a.byes !== b.byes) return a.byes - b.byes;
+        if ((a.gameStreak || 0) !== (b.gameStreak || 0)) return (a.gameStreak || 0) - (b.gameStreak || 0);
         if (b.points !== a.points) return b.points - a.points;
         return a.name.localeCompare(b.name);
       });
 
       function backtrack(remaining) {
         if (remaining.length === 0) return [];
+
         const teamA = remaining[0];
         const rest = remaining.slice(1);
 
@@ -888,9 +915,7 @@ function pushLiveState() {
           const alreadyB = teamA.playedOpponents.includes(b.id) ? 1 : 0;
           if (alreadyA !== alreadyB) return alreadyA - alreadyB;
 
-          const aWasResting = lastResting.includes(a.id) ? 1 : 0;
-          const bWasResting = lastResting.includes(b.id) ? 1 : 0;
-          if (aWasResting !== bWasResting) return aWasResting - bWasResting;
+          if ((b.restStreak || 0) !== (a.restStreak || 0)) return (b.restStreak || 0) - (a.restStreak || 0);
 
           const gamesGapA = Math.abs(teamA.played - a.played);
           const gamesGapB = Math.abs(teamA.played - b.played);
@@ -922,6 +947,7 @@ function pushLiveState() {
 
       const fallback = [];
       const used = new Set();
+
       for (let i = 0; i < pool.length; i++) {
         const teamA = pool[i];
         if (!teamA || used.has(teamA.id)) continue;
@@ -947,14 +973,13 @@ function pushLiveState() {
     function generateNextRound() {
       if (!allScoresFilled() || isTournamentFinished()) return;
 
-      previousState = {
-        teams: JSON.parse(JSON.stringify(teams)),
+      previousState = JSON.parse(JSON.stringify({
+        teams,
         round,
-        matches: JSON.parse(JSON.stringify(matches)),
-        resting: JSON.parse(JSON.stringify(resting)),
-        lastResting: JSON.parse(JSON.stringify(lastResting)),
-        finalShown,
-      };
+        matches,
+        resting,
+        finalShown
+      }));
 
       let updated = teams.map(t => ({ ...t }));
 
@@ -974,56 +999,60 @@ function pushLiveState() {
         a.playedOpponents = [...a.playedOpponents, b.id];
         b.playedOpponents = [...b.playedOpponents, a.id];
 
+        a.gameStreak = (a.gameStreak || 0) + 1;
+        b.gameStreak = (b.gameStreak || 0) + 1;
+        a.restStreak = 0;
+        b.restStreak = 0;
+
         if (scoreA > scoreB) a.points += 3;
         if (scoreB > scoreA) b.points += 3;
       }
 
       for (const id of resting) {
         const team = updated.find(t => t.id === id);
-        if (team && team.played < MAX_GAMES_PER_TEAM) team.byes += 1;
+        if (team && team.played < MAX_GAMES_PER_TEAM) {
+          team.byes += 1;
+          team.restStreak = (team.restStreak || 0) + 1;
+          team.gameStreak = 0;
+        }
       }
 
       const unfinished = updated.filter(t => t.played < MAX_GAMES_PER_TEAM);
 
       const ordered = [...unfinished].sort((a, b) => {
-        const aWasResting = lastResting.includes(a.id) ? 1 : 0;
-        const bWasResting = lastResting.includes(b.id) ? 1 : 0;
-        if (aWasResting !== bWasResting) return aWasResting - bWasResting;
+        if ((b.restStreak || 0) !== (a.restStreak || 0)) return (b.restStreak || 0) - (a.restStreak || 0);
         if (a.played !== b.played) return a.played - b.played;
         if (a.byes !== b.byes) return a.byes - b.byes;
+        if ((a.gameStreak || 0) !== (b.gameStreak || 0)) return (a.gameStreak || 0) - (b.gameStreak || 0);
         if (b.points !== a.points) return b.points - a.points;
         return a.name.localeCompare(b.name);
       });
 
       let selected = ordered.slice(0, Math.min(8, ordered.length));
+
       if (selected.length % 2 !== 0) {
         const extraRest = selected.pop();
-        if (extraRest && extraRest.played < MAX_GAMES_PER_TEAM) extraRest.byes += 1;
+        if (extraRest && extraRest.played < MAX_GAMES_PER_TEAM) {
+          extraRest.byes += 1;
+          extraRest.restStreak = (extraRest.restStreak || 0) + 1;
+          extraRest.gameStreak = 0;
+        }
       }
 
       const pairings = buildFairPairings(selected);
-      const selectedIds = new Set(selected.map(t => t.id));
       const pairedIds = new Set(pairings.flatMap(p => [p.teamA, p.teamB]));
 
       for (const team of selected) {
         if (!pairedIds.has(team.id) && team.played < MAX_GAMES_PER_TEAM) {
           team.byes += 1;
+          team.restStreak = (team.restStreak || 0) + 1;
+          team.gameStreak = 0;
         }
       }
 
-      let nextRest = updated
-        .filter(t => !pairedIds.has(t.id) || !selectedIds.has(t.id) || t.played >= MAX_GAMES_PER_TEAM)
+      const nextRest = updated
+        .filter(t => !pairedIds.has(t.id) || t.played >= MAX_GAMES_PER_TEAM)
         .map(t => t.id);
-
-      const consecutiveResters = nextRest.filter(id => lastResting.includes(id) && (getTeam(id)?.played || updated.find(t => t.id === id)?.played || 0) < MAX_GAMES_PER_TEAM);
-      if (consecutiveResters.length > 0 && pairings.length > 0) {
-        nextRest = [...nextRest].sort((a, b) => {
-          const aWasResting = lastResting.includes(a) ? 1 : 0;
-          const bWasResting = lastResting.includes(b) ? 1 : 0;
-          if (aWasResting !== bWasResting) return aWasResting - bWasResting;
-          return 0;
-        });
-      }
 
       teams = updated;
       matches = [
@@ -1032,11 +1061,12 @@ function pushLiveState() {
         { court: 3, teamA: pairings[2]?.teamA || '', teamB: pairings[2]?.teamB || '', scoreA: '', scoreB: '' },
         { court: 4, teamA: pairings[3]?.teamA || '', teamB: pairings[3]?.teamB || '', scoreA: '', scoreB: '' },
       ];
-      lastResting = [...resting];
       resting = nextRest;
+
       if (pairings.length > 0) {
         round = Math.min(round + 1, 8);
       }
+
       renderAll();
       maybeShowFinalRanking();
     }
@@ -1047,27 +1077,22 @@ function pushLiveState() {
       round = state.round;
       matches = state.matches;
       resting = state.resting;
-      lastResting = state.lastResting;
       finalShown = false;
       previousState = null;
       localStorage.removeItem(STORAGE_KEY);
-      document.getElementById('searchInput').value = '';
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput) searchInput.value = '';
       hideFinalRanking();
       renderAll();
     }
 
-    function updateEditLastRoundButton() {
-      const btn = document.getElementById('editLastRoundBtn');
-      if (btn) btn.disabled = !previousState;
-    }
-
     function editLastRound() {
       if (!previousState) return;
+
       teams = JSON.parse(JSON.stringify(previousState.teams));
       round = previousState.round;
       matches = JSON.parse(JSON.stringify(previousState.matches));
       resting = JSON.parse(JSON.stringify(previousState.resting));
-      lastResting = JSON.parse(JSON.stringify(previousState.lastResting || previousState.resting || []));
       finalShown = !!previousState.finalShown;
       previousState = null;
       hideFinalRanking();
@@ -1083,10 +1108,12 @@ function pushLiveState() {
       renderSearch();
       updateButton();
       updateEditLastRoundButton();
+
       if (finalShown && isTournamentFinished()) {
         renderFinalRanking();
         document.getElementById('finalOverlay').classList.add('show');
       }
+
       saveState();
       pushLiveState();
     }
@@ -1110,6 +1137,7 @@ function pushLiveState() {
     renderAll();
     maybeShowFinalRanking();
   </script>
+
   <style>
     @media print {
       body {
