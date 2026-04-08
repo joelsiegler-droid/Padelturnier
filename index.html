@@ -515,7 +515,35 @@
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
+import { getDatabase, ref, set } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCzmiqY0gRlwxIWmNQZobyjR-EsvmIJYXY",
+  authDomain: "padelturnier.firebaseapp.com",
+  databaseURL: "https://padelturnier-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "padelturnier",
+  storageBucket: "padelturnier.firebasestorage.app",
+  messagingSenderId: "320980269605",
+  appId: "1:320980269605:web:731a92286e0b6a3b119dcc"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const tournamentRef = ref(db, 'tournament/current');
+
+function pushLiveState() {
+  set(tournamentRef, {
+    round,
+    teams,
+    matches,
+    resting,
+    finalShown
+  }).catch(error => {
+    console.error('Fehler beim Live-Schreiben:', error);
+  });
+}
     const STORAGE_KEY = 'padel-turnier-manager-state-v3';
     const MAX_GAMES_PER_TEAM = 5;
     const ROUND_TIMES = [
@@ -1060,6 +1088,7 @@
         document.getElementById('finalOverlay').classList.add('show');
       }
       saveState();
+      pushLiveState();
     }
 
     loadState();
