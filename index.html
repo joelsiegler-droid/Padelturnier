@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Padel Turnier Manager</title>
+  <title>Padel Turnier Manager, 10 Teams</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -312,9 +312,7 @@
       padding: 24px;
       z-index: 1000;
     }
-    .final-overlay.show {
-      display: flex;
-    }
+    .final-overlay.show { display: flex; }
     .final-card {
       width: min(100%, 980px);
       max-height: min(88vh, 900px);
@@ -394,7 +392,7 @@
         <div class="badge">🏆 Padel Plauschturnier</div>
         <h1>Turnier Dashboard</h1>
         <div class="sub">
-          Funktionierende Version mit automatischer Tabelle, nächster Runde, Teamsuche, bearbeitbaren Teamnamen und automatischer finaler Rangliste.
+          10 Teams, 6 Spiele pro Team, 18 Minuten Spielzeit, 3 Minuten Wechselpause, Einspielphase von 14:00 bis 14:05.
         </div>
       </div>
       <div class="stats">
@@ -404,11 +402,11 @@
         </div>
         <div class="stat">
           <div class="label">Zeitfenster</div>
-          <div class="value" id="roundTime" style="font-size:28px">14:00 - 14:18</div>
+          <div class="value" id="roundTime" style="font-size:28px">14:05 - 14:23</div>
         </div>
         <div class="stat">
           <div class="label">Teams</div>
-          <div class="value" id="teamCount">12</div>
+          <div class="value" id="teamCount">10</div>
         </div>
       </div>
     </section>
@@ -420,7 +418,7 @@
           <div class="panel-body">
             <div class="matches" id="matches"></div>
             <div class="controls">
-              <div class="hint">Sobald alle Resultate drin sind, wird die nächste Runde automatisch mit neuen Paarungen erstellt.</div>
+              <div class="hint">Fairness zuerst, keine doppelten Gegner, keine 2 Pausen hintereinander, danach möglichst ausgeglichene Paarungen.</div>
               <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <button class="btn" id="nextRoundBtn">Nächste Runde generieren</button>
                 <button class="btn" id="editLastRoundBtn" style="background:#f59e0b;color:#1f2937;">Letzte Runde bearbeiten</button>
@@ -489,7 +487,7 @@
     <div class="final-card">
       <div class="final-head">
         <h2 class="final-title">Finale Rangliste</h2>
-        <div class="final-sub">Alle Teams haben ihre 5 Spiele absolviert. Hier ist automatisch die Abschlusstabelle des Turniers.</div>
+        <div class="final-sub">Alle Teams haben ihre 6 Spiele absolviert. Hier ist automatisch die Abschlusstabelle des Turniers.</div>
       </div>
       <div class="final-body">
         <div class="final-podium" id="finalPodium"></div>
@@ -533,17 +531,19 @@
     const db = getDatabase(app);
     const tournamentRef = ref(db, 'tournament/current');
 
-    const STORAGE_KEY = 'padel-turnier-manager-state-v4';
-    const MAX_GAMES_PER_TEAM = 5;
+    const STORAGE_KEY = 'padel-turnier-10-teams-v1';
+    const MAX_GAMES_PER_TEAM = 6;
+    const TOTAL_TEAMS = 10;
+    const COURTS = 4;
     const ROUND_TIMES = [
-       '14:05 - 14:23',
-  '14:25 - 14:43',
-  '14:45 - 15:03',
-  '15:05 - 15:23',
-  '15:25 - 15:43',
-  '15:45 - 16:03',
-  '16:05 - 16:23',
-  '16:25 - 16:43',
+      '14:05 - 14:23',
+      '14:26 - 14:44',
+      '14:47 - 15:05',
+      '15:08 - 15:26',
+      '15:29 - 15:47',
+      '15:50 - 16:08',
+      '16:11 - 16:29',
+      '16:32 - 16:50',
     ];
 
     let teams = [];
@@ -554,7 +554,7 @@
     let previousState = null;
 
     function createDefaultTeams() {
-      return Array.from({ length: 12 }, (_, i) => ({
+      return Array.from({ length: TOTAL_TEAMS }, (_, i) => ({
         id: `T${i + 1}`,
         name: `Team ${i + 1}`,
         playedOpponents: [],
@@ -578,9 +578,9 @@
           { court: 3, teamA: 'T5', teamB: 'T6', scoreA: '', scoreB: '' },
           { court: 4, teamA: 'T7', teamB: 'T8', scoreA: '', scoreB: '' },
         ],
-        resting: ['T9', 'T10', 'T11', 'T12'],
+        resting: ['T9', 'T10'],
         finalShown: false,
-        previousState: null
+        previousState: null,
       };
     }
 
@@ -591,7 +591,7 @@
         matches,
         resting,
         finalShown,
-        previousState
+        previousState,
       }));
     }
 
@@ -611,7 +611,7 @@
         const parsed = JSON.parse(raw);
         teams = parsed.teams || createDefaultTeams();
         round = parsed.round || 1;
-        matches = parsed.matches || [];
+        matches = parsed.matches || defaultState().matches;
         resting = parsed.resting || [];
         finalShown = !!parsed.finalShown;
         previousState = parsed.previousState || null;
@@ -632,7 +632,7 @@
         teams,
         matches,
         resting,
-        finalShown
+        finalShown,
       }).catch(error => {
         console.error('Fehler beim Live-Schreiben:', error);
       });
@@ -681,8 +681,7 @@
     function updateStats() {
       document.getElementById('roundValue').textContent = round;
       document.getElementById('roundTime').textContent = ROUND_TIMES[round - 1] || '-';
-      const teamCountEl = document.getElementById('teamCount');
-      if (teamCountEl) teamCountEl.textContent = teams.length;
+      document.getElementById('teamCount').textContent = teams.length;
     }
 
     function renderMatches() {
@@ -785,10 +784,8 @@
         input.addEventListener('input', e => {
           const id = e.target.dataset.team;
           const cursorPos = e.target.selectionStart;
-
           teams = teams.map(t => t.id === id ? { ...t, name: e.target.value } : t);
           renderAll();
-
           const active = document.querySelector(`.name-input[data-team="${id}"]`);
           if (active) {
             active.focus();
@@ -804,7 +801,6 @@
       if (!input || !result) return;
 
       const search = input.value.toLowerCase().trim();
-
       if (!search) {
         result.innerHTML = '<div style="color:#94a3b8">Gib einen Teamnamen ein, um Platz, Zeit und Gegner zu sehen.</div>';
         return;
@@ -817,7 +813,6 @@
       }
 
       const nextMatch = matches.find(m => m.teamA === filteredTeam.id || m.teamB === filteredTeam.id);
-
       if (nextMatch) {
         const opponent = getName(nextMatch.teamA === filteredTeam.id ? nextMatch.teamB : nextMatch.teamA);
         result.innerHTML = `
@@ -894,6 +889,17 @@
       }
     }
 
+    function pickRestTeams(sortedUnfinished, count) {
+      const pool = [...sortedUnfinished].sort((a, b) => {
+        if ((a.restStreak || 0) !== (b.restStreak || 0)) return (a.restStreak || 0) - (b.restStreak || 0);
+        if ((b.gameStreak || 0) !== (a.gameStreak || 0)) return (b.gameStreak || 0) - (a.gameStreak || 0);
+        if (a.played !== b.played) return b.played - a.played;
+        if (a.byes !== b.byes) return a.byes - b.byes;
+        return a.name.localeCompare(b.name);
+      });
+      return pool.slice(0, Math.max(0, count)).map(t => t.id);
+    }
+
     function buildFairPairings(candidates) {
       const pool = [...candidates].sort((a, b) => {
         if ((b.restStreak || 0) !== (a.restStreak || 0)) return (b.restStreak || 0) - (a.restStreak || 0);
@@ -909,13 +915,14 @@
 
         const teamA = remaining[0];
         const rest = remaining.slice(1);
-
         const orderedOpponents = [...rest].sort((a, b) => {
           const alreadyA = teamA.playedOpponents.includes(a.id) ? 1 : 0;
           const alreadyB = teamA.playedOpponents.includes(b.id) ? 1 : 0;
           if (alreadyA !== alreadyB) return alreadyA - alreadyB;
 
-          if ((b.restStreak || 0) !== (a.restStreak || 0)) return (b.restStreak || 0) - (a.restStreak || 0);
+          const pointsGapA = Math.abs(teamA.points - a.points);
+          const pointsGapB = Math.abs(teamA.points - b.points);
+          if (pointsGapA !== pointsGapB) return pointsGapA - pointsGapB;
 
           const gamesGapA = Math.abs(teamA.played - a.played);
           const gamesGapB = Math.abs(teamA.played - b.played);
@@ -924,10 +931,6 @@
           const byeGapA = Math.abs(teamA.byes - a.byes);
           const byeGapB = Math.abs(teamA.byes - b.byes);
           if (byeGapA !== byeGapB) return byeGapA - byeGapB;
-
-          const pointsGapA = Math.abs(teamA.points - a.points);
-          const pointsGapB = Math.abs(teamA.points - b.points);
-          if (pointsGapA !== pointsGapB) return pointsGapA - pointsGapB;
 
           return a.name.localeCompare(b.name);
         });
@@ -938,7 +941,6 @@
           const tail = backtrack(nextRemaining);
           if (tail) return [{ teamA: teamA.id, teamB: opponent.id }, ...tail];
         }
-
         return null;
       }
 
@@ -947,11 +949,9 @@
 
       const fallback = [];
       const used = new Set();
-
       for (let i = 0; i < pool.length; i++) {
         const teamA = pool[i];
         if (!teamA || used.has(teamA.id)) continue;
-
         let opponent = null;
         for (let j = i + 1; j < pool.length; j++) {
           const teamB = pool[j];
@@ -959,14 +959,12 @@
           opponent = teamB;
           break;
         }
-
         if (opponent) {
           used.add(teamA.id);
           used.add(opponent.id);
           fallback.push({ teamA: teamA.id, teamB: opponent.id });
         }
       }
-
       return fallback;
     }
 
@@ -978,7 +976,7 @@
         round,
         matches,
         resting,
-        finalShown
+        finalShown,
       }));
 
       let updated = teams.map(t => ({ ...t }));
@@ -998,7 +996,6 @@
         b.gamesAgainst += scoreA;
         a.playedOpponents = [...a.playedOpponents, b.id];
         b.playedOpponents = [...b.playedOpponents, a.id];
-
         a.gameStreak = (a.gameStreak || 0) + 1;
         b.gameStreak = (b.gameStreak || 0) + 1;
         a.restStreak = 0;
@@ -1018,8 +1015,7 @@
       }
 
       const unfinished = updated.filter(t => t.played < MAX_GAMES_PER_TEAM);
-
-      const ordered = [...unfinished].sort((a, b) => {
+      const sortedUnfinished = [...unfinished].sort((a, b) => {
         if ((b.restStreak || 0) !== (a.restStreak || 0)) return (b.restStreak || 0) - (a.restStreak || 0);
         if (a.played !== b.played) return a.played - b.played;
         if (a.byes !== b.byes) return a.byes - b.byes;
@@ -1028,31 +1024,27 @@
         return a.name.localeCompare(b.name);
       });
 
-      let selected = ordered.slice(0, Math.min(8, ordered.length));
+      const roundsRemaining = ROUND_TIMES.length - round;
+      const matchesNeeded = unfinished.reduce((sum, team) => sum + (MAX_GAMES_PER_TEAM - team.played), 0) / 2;
+      const minCurrentMatches = Math.max(0, matchesNeeded - roundsRemaining * COURTS);
+      const targetMatchesThisRound = Math.min(COURTS, Math.max(minCurrentMatches, Math.ceil(matchesNeeded / (roundsRemaining + 1))));
+      const targetPlayersThisRound = Math.min(sortedUnfinished.length, targetMatchesThisRound * 2);
+      const targetRestCount = Math.max(0, unfinished.length - targetPlayersThisRound);
 
-      if (selected.length % 2 !== 0) {
-        const extraRest = selected.pop();
-        if (extraRest && extraRest.played < MAX_GAMES_PER_TEAM) {
-          extraRest.byes += 1;
-          extraRest.restStreak = (extraRest.restStreak || 0) + 1;
-          extraRest.gameStreak = 0;
-        }
-      }
-
+      const forcedRestIds = pickRestTeams(sortedUnfinished, targetRestCount);
+      const restSet = new Set(forcedRestIds);
+      const selected = sortedUnfinished.filter(t => !restSet.has(t.id));
       const pairings = buildFairPairings(selected);
       const pairedIds = new Set(pairings.flatMap(p => [p.teamA, p.teamB]));
 
-      for (const team of selected) {
-        if (!pairedIds.has(team.id) && team.played < MAX_GAMES_PER_TEAM) {
+      for (const team of updated) {
+        if (team.played >= MAX_GAMES_PER_TEAM) continue;
+        if (!pairedIds.has(team.id)) {
           team.byes += 1;
           team.restStreak = (team.restStreak || 0) + 1;
           team.gameStreak = 0;
         }
       }
-
-      const nextRest = updated
-        .filter(t => !pairedIds.has(t.id) || t.played >= MAX_GAMES_PER_TEAM)
-        .map(t => t.id);
 
       teams = updated;
       matches = [
@@ -1061,10 +1053,10 @@
         { court: 3, teamA: pairings[2]?.teamA || '', teamB: pairings[2]?.teamB || '', scoreA: '', scoreB: '' },
         { court: 4, teamA: pairings[3]?.teamA || '', teamB: pairings[3]?.teamB || '', scoreA: '', scoreB: '' },
       ];
-      resting = nextRest;
+      resting = updated.filter(t => t.played < MAX_GAMES_PER_TEAM && !pairedIds.has(t.id)).map(t => t.id);
 
       if (pairings.length > 0) {
-        round = Math.min(round + 1, 8);
+        round = Math.min(round + 1, ROUND_TIMES.length);
       }
 
       renderAll();
@@ -1088,7 +1080,6 @@
 
     function editLastRound() {
       if (!previousState) return;
-
       teams = JSON.parse(JSON.stringify(previousState.teams));
       round = previousState.round;
       matches = JSON.parse(JSON.stringify(previousState.matches));
