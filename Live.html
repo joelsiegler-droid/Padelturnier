@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Padel Live Scores</title>
+  <title>Padel Live Scores, 10 Teams</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -208,6 +208,8 @@
     }
     .podium small {
       color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
     }
     .podium .name {
       margin-top: 12px;
@@ -319,7 +321,7 @@
         <div class="badge">📺 Zuschauer Ansicht</div>
         <h1>Live Scores & Ranking</h1>
         <div class="sub">
-          Diese Seite ist nur zum Anschauen. Spieler sehen aktuelle Paarungen, Resultate, Pausen und die Rangliste, ohne etwas bearbeiten zu können.
+          10 Teams, 6 Spiele pro Team, 18 Minuten Spielzeit, 3 Minuten Pause, Einspielphase von 14:00 bis 14:05.
         </div>
       </div>
       <div class="stats">
@@ -403,13 +405,13 @@
 
     const ROUND_TIMES = [
       '14:05 - 14:23',
-  '14:25 - 14:43',
-  '14:45 - 15:03',
-  '15:05 - 15:23',
-  '15:25 - 15:43',
-  '15:45 - 16:03',
-  '16:05 - 16:23',
-  '16:25 - 16:43',
+      '14:26 - 14:44',
+      '14:47 - 15:05',
+      '15:08 - 15:26',
+      '15:29 - 15:47',
+      '15:50 - 16:08',
+      '16:11 - 16:29',
+      '16:32 - 16:50',
     ];
 
     const firebaseConfig = {
@@ -464,7 +466,6 @@
     function renderMatches(data) {
       const container = document.getElementById('matches');
       const matches = (data.matches || []).filter(m => m.teamA && m.teamB);
-
       if (matches.length === 0) {
         container.innerHTML = '<div class="muted">Noch keine Spiele sichtbar.</div>';
         return;
@@ -531,12 +532,10 @@
     function renderPause(data) {
       const pauseList = document.getElementById('pauseList');
       const resting = data.restingNames || data.resting || [];
-
       if (resting.length === 0) {
         pauseList.innerHTML = '<div class="muted">Aktuell keine Pause angezeigt.</div>';
         return;
       }
-
       pauseList.innerHTML = resting.map(name => `
         <div class="pause-item">${name}</div>
       `).join('');
@@ -557,7 +556,6 @@
       }));
       const restingNames = (raw?.resting || []).map(id => teamMap.get(id)?.name || id);
       const ranking = buildRankingFromTeams(teams);
-
       return {
         round: raw?.round || 1,
         matches,
