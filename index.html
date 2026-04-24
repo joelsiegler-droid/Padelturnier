@@ -531,7 +531,7 @@
     const db = getDatabase(app);
     const tournamentRef = ref(db, 'tournament/current');
 
-    const STORAGE_KEY = 'padel-turnier-10-teams-v1';
+    const STORAGE_KEY = 'padel-turnier-10-teams-v2';
     const MAX_GAMES_PER_TEAM = 6;
     const TOTAL_TEAMS = 10;
     const COURTS = 4;
@@ -545,6 +545,7 @@
       '16:11 - 16:29',
       '16:32 - 16:50',
     ];
+    const ROUND_MATCH_CAPACITY = [4, 4, 4, 4, 4, 4, 3, 3];
 
     let teams = [];
     let round = 1;
@@ -889,19 +890,8 @@
       }
     }
 
-    function pickRestTeams(sortedUnfinished, count) {
-      const pool = [...sortedUnfinished].sort((a, b) => {
-        if ((a.restStreak || 0) !== (b.restStreak || 0)) return (a.restStreak || 0) - (b.restStreak || 0);
-        if ((b.gameStreak || 0) !== (a.gameStreak || 0)) return (b.gameStreak || 0) - (a.gameStreak || 0);
-        if (a.played !== b.played) return b.played - a.played;
-        if (a.byes !== b.byes) return a.byes - b.byes;
-        return a.name.localeCompare(b.name);
-      });
-      return pool.slice(0, Math.max(0, count)).map(t => t.id);
-    }
-
-    function buildFairPairings(candidates) {
-      const pool = [...candidates].sort((a, b) => {
+    function sortForPlayPriority(arr) {
+      return [...arr].sort((a, b) => {
         if ((b.restStreak || 0) !== (a.restStreak || 0)) return (b.restStreak || 0) - (a.restStreak || 0);
         if (a.played !== b.played) return a.played - b.played;
         if (a.byes !== b.byes) return a.byes - b.byes;
@@ -909,6 +899,20 @@
         if (b.points !== a.points) return b.points - a.points;
         return a.name.localeCompare(b.name);
       });
+    }
+
+    function pickRestTeams(sortedUnfinished, count) {
+      return [...sortedUnfinished].sort((a, b) => {
+        if ((a.restStreak || 0) !== (b.restStreak || 0)) return (a.restStreak || 0) - (b.restStreak || 0);
+        if ((b.gameStreak || 0) !== (a.gameStreak || 0)) return (b.gameStreak || 0) - (a.gameStreak || 0);
+        if (a.played !== b.played) return b.played - a.played;
+        if (a.byes !== b.byes) return a.byes - b.byes;
+        return a.name.localeCompare(b.name);
+      }).slice(0, Math.max(0, count)).map(t => t.id);
+    }
+
+    function buildFairPairings(candidates) {
+      const pool = sortForPlayPriority(candidates);
 
       function backtrack(remaining) {
         if (remaining.length === 0) return [];
@@ -968,6 +972,23 @@
       return fallback;
     }
 
+    function chooseTeamsForRound(sortedUnfinished, targetMatches) {
+      const targetPlayers = Math.min(sortedUnfinished.length, targetMatches * 2);
+      const targetRestCount = Math.max(0, sortedUnfinished.length - targetPlayers);
+      const forcedRestIds = new Set(pickRestTeams(sortedUnfinished, targetRestCount));
+      let selected = sortedUnfinished.filter(t => !forcedRestIds.has(t.id));
+
+      if (selected.length % 2 !== 0) {
+        const extra = selected.pop();
+        if (extra) forcedRestIds.add(extra.id);
+      }
+
+      return {
+        selected,
+        forcedRestIds,
+      };
+    }
+
     function generateNextRound() {
       if (!allScoresFilled() || isTournamentFinished()) return;
 
@@ -1015,31 +1036,15 @@
       }
 
       const unfinished = updated.filter(t => t.played < MAX_GAMES_PER_TEAM);
-      const sortedUnfinished = [...unfinished].sort((a, b) => {
-        if ((b.restStreak || 0) !== (a.restStreak || 0)) return (b.restStreak || 0) - (a.restStreak || 0);
-        if (a.played !== b.played) return a.played - b.played;
-        if (a.byes !== b.byes) return a.byes - b.byes;
-        if ((a.gameStreak || 0) !== (b.gameStreak || 0)) return (a.gameStreak || 0) - (b.gameStreak || 0);
-        if (b.points !== a.points) return b.points - a.points;
-        return a.name.localeCompare(b.name);
-      });
-
-      const roundsRemaining = ROUND_TIMES.length - round;
-      const matchesNeeded = unfinished.reduce((sum, team) => sum + (MAX_GAMES_PER_TEAM - team.played), 0) / 2;
-      const minCurrentMatches = Math.max(0, matchesNeeded - roundsRemaining * COURTS);
-      const targetMatchesThisRound = Math.min(COURTS, Math.max(minCurrentMatches, Math.ceil(matchesNeeded / (roundsRemaining + 1))));
-      const targetPlayersThisRound = Math.min(sortedUnfinished.length, targetMatchesThisRound * 2);
-      const targetRestCount = Math.max(0, unfinished.length - targetPlayersThisRound);
-
-      const forcedRestIds = pickRestTeams(sortedUnfinished, targetRestCount);
-      const restSet = new Set(forcedRestIds);
-      const selected = sortedUnfinished.filter(t => !restSet.has(t.id));
+      const sortedUnfinished = sortForPlayPriority(unfinished);
+      const targetMatchesThisRound = ROUND_MATCH_CAPACITY[Math.max(0, Math.min(round - 1, ROUND_MATCH_CAPACITY.length - 1))];
+      const { selected, forcedRestIds } = chooseTeamsForRound(sortedUnfinished, targetMatchesThisRound);
       const pairings = buildFairPairings(selected);
       const pairedIds = new Set(pairings.flatMap(p => [p.teamA, p.teamB]));
 
       for (const team of updated) {
         if (team.played >= MAX_GAMES_PER_TEAM) continue;
-        if (!pairedIds.has(team.id)) {
+        if (forcedRestIds.has(team.id) || !pairedIds.has(team.id)) {
           team.byes += 1;
           team.restStreak = (team.restStreak || 0) + 1;
           team.gameStreak = 0;
